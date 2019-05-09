@@ -10,11 +10,13 @@ def read(fname):
 
 setup(
     name = "imx-nand-tools",
-    version = "1.0.0",
+    version = "1.0.3",
+    python_requires='>3.5.2',
     url='https://github.com/DigitalSecurity/imx-nand-tools',
     author = "Damien Cauquil",
     author_email = "damien.cauquil@digital.security",
-    description = ("Freescale IMX6 NAND reverse tools"),
+    description = ("Freescale i.MX NAND reverse tools"),
+    long_description=read("README.rst"),
     license = "MIT",
     keywords = "imx freescale tool",
     packages=['imxtools'],
