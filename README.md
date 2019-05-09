@@ -45,6 +45,9 @@ How to use it
 This tool loooks for the first *Firmware Control Block* (FCB) contained in a dump and parse it and then
 displays its contents.
 
+```
+$ imx-nand-info fresh-dump.bin
+```
 
 ### imx-nand-convert
 
