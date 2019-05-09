@@ -10,7 +10,8 @@ def read(fname):
 
 setup(
     name = "imx-nand-tools",
-    version = "1.1.0",
+    version = "1.0.0",
+    url='https://github.com/DigitalSecurity/imx-nand-tools',
     author = "Damien Cauquil",
     author_email = "damien.cauquil@digital.security",
     description = ("Freescale IMX6 NAND reverse tools"),
