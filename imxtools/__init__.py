@@ -15,6 +15,15 @@ from argparse import ArgumentParser
 from termcolor import colored
 from imxtools.fcb import FCB, FCBError
 
+class BCH:
+    instance = None
+
+    @staticmethod
+    def get_instance(ecc_strength):
+        if BCH.instance is None:
+            BCH.instance = bchlib.BCH(8219, ecc_strength, reverse=True)
+        return BCH.instance
+
 def skip_bits(page, nbits, nbytes):
     """
     Skip bits for a given page
@@ -56,9 +65,8 @@ def ecc_correct(block, code, ecc_strength):
     """
     Try to fix `block` with `code`, for an ECC size of `bitsize`.
     """
-    ecc = bchlib.BCH(8219, ecc_strength, reverse=True)
     try:
-        block_ = ecc.correct(bytes(block), bytes(code))
+        block_ = BCH.get_instance(ecc_strength).correct(bytes(block), bytes(code))
         return block_
     except Exception as e:
         return block
@@ -71,7 +79,7 @@ def process_page(page, fcb, ecc=False):
     # First, remove metadata bytes
     page_size = len(page)
     marker = page[0]
-    assert(page[fcb.marker_raw_offset]==0xff)
+    #assert(page[fcb.marker_raw_offset]==0xff)
     page = page[:fcb.marker_raw_offset] + bytes([marker]) + page[fcb.marker_raw_offset+1:]
     page = page[fcb.metadata_bytes:]
 
