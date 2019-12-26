@@ -17,14 +17,58 @@ from imxtools.fcb import FCB, FCBError
 
 class BCH:
     instance = None
+    # statistics
+    n_blocks_ok = 0
+    n_blocks_corrected = 0
+    n_blocks_broken = 0
+    n_fatal_errors = 0
+    # default primitive polynomials (https://github.com/jkent/python-bchlib/blob/6afc3e9792cef9b6dbe6ab9d1eef95cb2be2fef2/src/bch.c)
+    prim_poly_tab = [0x25, 0x43, 0x83, 0x11d, 0x211, 0x409, 0x805, 0x1053, 0x201b, 0x402b, 0x8003]
 
     @staticmethod
     def get_instance(ecc_strength):
         if BCH.instance is None:
-            BCH.instance = bchlib.BCH(8219, ecc_strength, reverse=True)
+            BCH.instance = bchlib.BCH(BCH.prim_poly_tab[8], ecc_strength, reverse=True)
         return BCH.instance
 
-def skip_bits(page, nbits, nbytes):
+    @staticmethod
+    def correct(block, ecc, ecc_strength):
+        """
+        Try to fix `block` with `ecc`, for an ECC size of `bitsize`.
+        """
+        try:
+            # get instance and try to correct
+            bch = BCH.get_instance(ecc_strength)
+            bitflips, data, _ = bch.decode(bytes(block), bytes(ecc))
+            # parse result
+            if bitflips > 0:
+                BCH.n_blocks_corrected += 1
+                return data
+            elif bitflips == 0:
+                BCH.n_blocks_ok += 1
+            else:
+                BCH.n_blocks_broken += 1
+            return block
+        except Exception as e:
+            BCH.n_fatal_errors += 1
+            return block
+
+    @staticmethod
+    def stats_clear():
+        BCH.n_blocks_ok = 0
+        BCH.n_blocks_corrected = 0
+        BCH.n_blocks_broken = 0
+        BCH.n_fatal_errors = 0
+
+    @staticmethod
+    def stats_print():
+        print('>> ECC correction statistics:')
+        print('>> \tnum blocks without correction = %u' % BCH.n_blocks_ok)
+        print('>> \tnum corrected blocks = %u' % BCH.n_blocks_corrected)
+        print('>> \tnum uncorrectable blocks = %u' % BCH.n_blocks_broken)
+        print('>> \tnum fatal errors = %u' % BCH.n_fatal_errors)
+
+def skip_bits(page, nbits):
     """
     Skip bits for a given page
     """
@@ -33,13 +77,13 @@ def skip_bits(page, nbits, nbytes):
     comp_shift= int(8 - rel_shift)
 
     # skip nbits/8 bytes first
-    page = page[int(nbits/8):]
+    page = page[int(nbits//8):]
     page += bytes([0])
 
     if rel_shift > 0:
         # Loop over bytes and shift rel_shift bits to the left
         output = []
-        for i in range(nbytes):
+        for i in range(len(page)-1):
             output.append(
                 (page[i]>>rel_shift) | ((page[i+1] << comp_shift)&0xff)
             )
@@ -59,21 +103,6 @@ def parse_fcb(content, verbosity=None, display=False):
 
     # return FCB info
     return fcb
-
-
-def ecc_correct(block, code, ecc_strength):
-    """
-    Try to fix `block` with `code`, for an ECC size of `bitsize`.
-    """
-    try:
-        bch = BCH.get_instance(ecc_strength)
-        bitflips, data, _ = bch.decode(bytes(block), bytes(code))
-        if bitflips > 0:
-            return data
-        return block
-    except Exception as e:
-        return block
-
 
 def process_page(page, fcb, ecc=False):
     """
@@ -101,7 +130,9 @@ def process_page(page, fcb, ecc=False):
             ecc_strength = fcb.get_ecc_blockN_strength()
             block_size = fcb.get_data_blockN_size()
 
-        ecc_nb_bytes = ceil(ecc_size/8)
+        ecc_nb_bytes = int(ecc_size/8)
+        if (fcb.get_ecc_block0_size()%8 > 0):
+            ecc_nb_bytes += 1
         ecc_bytes = page[block_size:block_size+ecc_nb_bytes]
 
 
@@ -110,15 +141,13 @@ def process_page(page, fcb, ecc=False):
 
         # try to correct block if required
         if ecc:
-            block = ecc_correct(block, ecc_bytes, ecc_strength*2)
+            block = BCH.correct(block, ecc_bytes, ecc_strength*2)
 
         # save block
         blocks.append(block)
 
         # skip ecc_size (in bits) bits
-        rem_page_nbits = (block_size*8 + ecc_size)*(nb_blocks-1-i)
-        rem_page_nbytes = ceil(rem_page_nbits/8)
-        page = skip_bits(page, block_size*8 + ecc_size, rem_page_nbytes)
+        page = skip_bits(page, block_size*8 + ecc_size)
 
     # Align to original page size
     output = []
@@ -160,6 +189,10 @@ def extract_firmware(content, fcb, output, firmware_id, bb_marker_override=None,
         c_block = process_page(page, fcb, correct_ecc)
         output.write(c_block)
     output.close()
+    bar.finish()
+
+    if correct_ecc:
+        BCH.stats_print()
 
 def convert_nand_dump(content, fcb, output, bb_marker_override=None, metadata_override=None, page_size_override=None, correct_ecc=False, ecc_size_override=None):
     """
@@ -189,7 +222,10 @@ def convert_nand_dump(content, fcb, output, bb_marker_override=None, metadata_ov
         c_block = process_page(page, fcb, correct_ecc)
         output.write(c_block)
     output.close()
+    bar.finish()
 
+    if correct_ecc:
+        BCH.stats_print()
 
 def find_fcb_offset(content):
     """
