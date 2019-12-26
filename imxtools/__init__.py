@@ -66,8 +66,11 @@ def ecc_correct(block, code, ecc_strength):
     Try to fix `block` with `code`, for an ECC size of `bitsize`.
     """
     try:
-        block_ = BCH.get_instance(ecc_strength).correct(bytes(block), bytes(code))
-        return block_
+        bch = BCH.get_instance(ecc_strength)
+        bitflips, data, _ = bch.decode(bytes(block), bytes(code))
+        if bitflips > 0:
+            return data
+        return block
     except Exception as e:
         return block
 
@@ -98,9 +101,7 @@ def process_page(page, fcb, ecc=False):
             ecc_strength = fcb.get_ecc_blockN_strength()
             block_size = fcb.get_data_blockN_size()
 
-        ecc_nb_bytes = int(ecc_size/8)
-        if (fcb.get_ecc_block0_size()%8 > 0):
-            ecc_nb_bytes += 1
+        ecc_nb_bytes = ceil(ecc_size/8)
         ecc_bytes = page[block_size:block_size+ecc_nb_bytes]
 
 
@@ -115,7 +116,9 @@ def process_page(page, fcb, ecc=False):
         blocks.append(block)
 
         # skip ecc_size (in bits) bits
-        page = skip_bits(page, block_size*8 + ecc_size, int(((block_size*8 + ecc_size)*(nb_blocks-1-i))/8))
+        rem_page_nbits = (block_size*8 + ecc_size)*(nb_blocks-1-i)
+        rem_page_nbytes = ceil(rem_page_nbits/8)
+        page = skip_bits(page, block_size*8 + ecc_size, rem_page_nbytes)
 
     # Align to original page size
     output = []
