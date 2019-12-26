@@ -87,7 +87,6 @@ def process_page(page, fcb, ecc=False):
     nb_blocks = fcb.nb_ecc_blocks_per_page+1
 
     # Iterate over each block
-    n = 8
     for i in range(nb_blocks):
         # First block is processed separately
         if i==0:
@@ -102,7 +101,7 @@ def process_page(page, fcb, ecc=False):
         ecc_nb_bytes = int(ecc_size/8)
         if (fcb.get_ecc_block0_size()%8 > 0):
             ecc_nb_bytes += 1
-        ecc = page[block_size:block_size+ecc_nb_bytes]
+        ecc_bytes = page[block_size:block_size+ecc_nb_bytes]
 
 
         # copy block_size bytes
@@ -110,14 +109,13 @@ def process_page(page, fcb, ecc=False):
 
         # try to correct block if required
         if ecc:
-            block = ecc_correct(block, ecc, ecc_strength*2)
+            block = ecc_correct(block, ecc_bytes, ecc_strength*2)
 
         # save block
         blocks.append(block)
 
         # skip ecc_size (in bits) bits
-        page = skip_bits(page, block_size*8 + ecc_size, int(((block_size*8 + ecc_size)*(n-1))/8))
-        n -= 1
+        page = skip_bits(page, block_size*8 + ecc_size, int(((block_size*8 + ecc_size)*(nb_blocks-1-i))/8))
 
     # Align to original page size
     output = []
