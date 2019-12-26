@@ -130,9 +130,7 @@ def process_page(page, fcb, ecc=False):
             ecc_strength = fcb.get_ecc_blockN_strength()
             block_size = fcb.get_data_blockN_size()
 
-        ecc_nb_bytes = int(ecc_size/8)
-        if (fcb.get_ecc_block0_size()%8 > 0):
-            ecc_nb_bytes += 1
+        ecc_nb_bytes = ceil(ecc_size/8)
         ecc_bytes = page[block_size:block_size+ecc_nb_bytes]
 
 
